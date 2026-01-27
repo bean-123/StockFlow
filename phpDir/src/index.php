@@ -1,8 +1,4 @@
 <?php
-echo "Welcome to PHP World ";
-echo "</br>";  
-
-
 // The MySQL service named in the docker-compose.yml.
 $host = 'db';
 
@@ -12,12 +8,57 @@ $user = 'lionUser';
 //database user password
 $pass = 'lionPass';
 
-// check the MySQL connection status
-$conn = new mysqli($host, $user, $pass);
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
-} else {
-    echo "Connected to MySQL server successfully!";
-}
-
 ?>
+
+<?php include "functions.php"; ?>
+<?php include "includes/header.php"; ?>
+
+<section class="content">
+
+  <aside class="col-sm-4">
+
+    <?php Navigation(); ?>
+
+  </aside>
+  <!--SIDEBAR-->
+
+  <article class="main-content col-sm-8">
+    <div class="jumbotron">
+      <h2 class="text-muted">Important</h2>
+
+      <?php echo "Welcome to PHP World ";
+      echo "</br>";
+      // check the MySQL connection status
+      $conn = new mysqli($host, $user, $pass);
+      if ($conn->connect_error) {
+        die("Connection failed: " . $conn->connect_error);
+      } else {
+        echo "Connected to MySQL server successfully!";
+      }
+      ?>
+
+      <h3>Personal message</h3>
+
+      <p>Welcome to learn PHP</p>
+
+      <p>
+      </p>
+
+      <h3>Contact</h3>
+
+
+      <p>PS: If you have some suggestions or questions make them at the discussion page or contact me directly at <a
+          href="mailto:martin.holland@bc.fi" target="_top">martin.holland@bc.fi </a></p>
+
+    </div>
+
+    <div class="row">
+
+
+    </div>
+
+
+    <div class="row">
+
+
+      <?php include "includes/footer.php"; ?>
