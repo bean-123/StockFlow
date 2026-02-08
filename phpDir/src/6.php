@@ -12,17 +12,16 @@
 
 
   <article class="main-content col-xs-8">
+  <?php $message = $_POST['message'] ?? ''; ?>
 
+    <form action="6.php" method="post">
+    <input type="text" name="message" placeholder="Enter a message">
+    <input type="submit" name="submit" value="Submit">
+  </form>
+  
+  
+    <?php echo $message; ?>
 
-    <?php
-
-		/*  Step1: Make a form that submits one value to POST super global
-
-
- */
-
-
-		?>
 
 
   </article>

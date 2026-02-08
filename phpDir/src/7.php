@@ -18,15 +18,35 @@
 	
 	<?php  
 
-	/*  Step 1 - Create a database in PHPmyadmin
+	/*  Step 1 - Create a database in PHPmyadmin - done
 
 		Step 2 - Create a table like the one from the lecture
+
+		id: 1, name: "John", password: "123456"
 
 		Step 3 - Insert some Data
 
 		Step 4 - Connect to Database and read data
 
 */
+
+	$host = 'db';
+	$user = 'lionUser';
+	$pass = 'lionPass';
+	$db = 'lionDB';
+	$conn = new mysqli($host, $user, $pass, $db);
+	if ($conn->connect_error) {
+		die("Connection failed: " . $conn->connect_error);
+	} else {
+		echo "Connected to MySQL server successfully!";
+	}
+
+	$sql = "SELECT * from users";
+	$result = $conn->query($sql);
+	while ($row = $result->fetch_assoc()) {
+		echo "ID: " . $row["id"] . " - Name: " . $row["name"] . " - Password: " . $row["password"] . "<br>";
+	}
+	$conn->close();
 	
 	?>
 

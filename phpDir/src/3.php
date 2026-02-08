@@ -25,6 +25,15 @@
 
  */
 
+ //Step1: Make an if Statement with elseif and else to finally display string saying, I love PHP
+ if ($number1 > $number2) {
+	echo "I love PHP";
+ } elseif ($number1 < $number2) {
+	echo "I love PHP";
+ } else {
+	echo "I love PHP";
+ }
+
 	// set the value of number1 and number2
 	$number1 = 50;
 	$number2 = 20;

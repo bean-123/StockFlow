@@ -26,6 +26,11 @@
 		Step 4 - echo the variable
 
 	*/
+
+	$textToEncrypt = "Goodbye World";
+	$salt = "zT9XZuYn89m";
+	$encryptedText = crypt($textToEncrypt, "2y$10zT9XZuYn89mabcdefghijE%");
+	echo $encryptedText;
 	
 	?>
 
