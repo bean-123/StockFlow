@@ -10,3 +10,5 @@ Practice Section 7:7.php
 Practice Section 8:8.php
 Practice Section 9:9.php
 Practice Section 10:10.php
+Authentication:11-authentication.php
+AI:ai-integration.php
