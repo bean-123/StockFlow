@@ -22,10 +22,15 @@ class SupabaseAuth {
     private $accessToken = null;
     private $user = null;
 
+    // Logging configuration
+    private $debug = true;
+    private $logs = [];
+
     /**
      * Constructor - Loads environment variables and starts session
      */
-    public function __construct() {
+    public function __construct($debug = true) { 
+        $this->debug = $debug;
         // Start PHP session for storing auth tokens
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
@@ -231,6 +236,45 @@ class SupabaseAuth {
         return $this->makeRequest('DELETE', '/rest/v1/' . $table . '?' . $filter);
     }
 
+    // Logging methods
+
+    private function log($type, $message, $data = null) {
+        if (!$this->debug) return;
+
+        $entry = [
+            'time' => date('H:i:s.' . substr(microtime(), 2,3)),
+            'type' => $type,
+            'message' => $message,
+            'data' => $data
+        ];
+
+        $this->logs[] = $entry;
+
+    }
+
+    public function getLogs() {
+        return $this->logs;
+    }
+
+    public function renderLogs() {
+        if (empty($this->logs)) return;
+
+        $html = '<div>';
+        $html .= '<h3>Debug Logs</h3>';
+
+        forEach($this->logs as $log) {
+            $html .= '<div class="log-entry">';
+            $html .= '<span class="log-time">' . $log['time'] . '</span>';
+            $html .= '<span class="log-type">' . $log['type'] . '</span>';
+            $html .= '<span class="log-message">' . $log['message'] . '</span>';
+            $html .= '<span class="log-data">' . $log['data'] . '</span>';
+            $html .= '</div>';
+        }
+
+        $html .= '</div>';
+        return $html;
+    }
+
     /**
      * Make an HTTP request to Supabase
      *
@@ -239,6 +283,9 @@ class SupabaseAuth {
      */
     private function makeRequest($method, $endpoint, $data = null) {
         $url = $this->supabaseUrl . $endpoint;
+
+        // Log the request:
+        $this->log('REQUEST', "$method $endpoint", $data);
 
         // Set up headers
         $headers = [
@@ -279,6 +326,7 @@ class SupabaseAuth {
 
         // Handle errors
         if ($error) {
+            $this->log('ERROR', "cURL error: " . $error);
             throw new Exception("cURL error: " . $error);
         }
 
