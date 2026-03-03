@@ -1,0 +1,7 @@
+api/.env
+client/.env
+
+api/vendor/
+
+client/node_modules/
+client/dist/

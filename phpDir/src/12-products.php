@@ -78,3 +78,4 @@ echo "<h1>Products Example</h1>";
 </section>
 
 <?php include "includes/footer.php"; ?>
+
