@@ -16,7 +16,18 @@ npm install                # Install dependencies (first time only)
 npm run dev                # Starts on http://localhost:5174
 ```
 
-### 3. Set up Supabase Storage (for Exercise 5)
+### 3. Check Supabase RLS policies
+
+The products table needs a **public read** policy so the product list works without login. In the Supabase Dashboard, go to **Authentication > Policies > products** and check that the SELECT policy uses `USING (true)`:
+
+```sql
+-- Products should be readable by everyone (no login required)
+ALTER POLICY "Anyone can view products" ON products USING (true);
+```
+
+> **Why?** The `GET /api/products` route has no AuthMiddleware (it's public). If the RLS policy requires `auth.uid() IS NOT NULL`, Supabase will return an empty array for unauthenticated requests.
+
+### 4. Set up Supabase Storage (for Exercise 5)
 
 Run this SQL in the **Supabase SQL Editor** to create the storage bucket for product images:
 
@@ -43,7 +54,7 @@ USING (bucket_id = 'product-images' AND auth.uid() IS NOT NULL);
 
 > **Note:** The `image_url` column already exists in the `products` table — no ALTER TABLE needed.
 
-### 4. Check it works
+### 5. Check it works
 - Open http://localhost:5174 — you should see the Products tab
 - Products should load from the API (names, SKUs, prices)
 - The "Status" column will show "—" until you complete Exercise 1
@@ -71,6 +82,7 @@ Each exercise tells you:
 | `api/src/Routes/ai.php` | Exercise 8 |
 | `api/src/Auth/SupabaseAuth.php` | Database + storage access (query, insert, update, delete, uploadFile) |
 | `api/src/AI/GeminiAI.php` | Gemini API wrapper (already built) |
+| `api/public/index.php` | App entry point — middleware setup, CORS, route loading (do not edit) |
 
 ### SupabaseAuth Quick Reference
 ```php
@@ -445,7 +457,9 @@ The `GeminiAI` class is already built at `api/src/AI/GeminiAI.php`. You just nee
 
 **"Status" column shows "—"** — You haven't implemented Exercise 1 yet. The frontend is looking for `stock_status` which doesn't exist in the raw data.
 
-**Image upload returns error** — Make sure you created the Supabase Storage bucket (see Setup step 3). Also check that the `product-images` bucket is set to public.
+**Products list is empty (no errors)** — The Supabase RLS policy for products must allow public reads. See Setup step 3.
+
+**Image upload returns error** — Make sure you created the Supabase Storage bucket (see Setup step 4). Also check that the `product-images` bucket is set to public.
 
 **CORS errors** — Make sure `CLIENT_URL` in `.env` matches your React dev server URL (default: `http://localhost:5174`).
 

@@ -9,6 +9,7 @@ $dotenv->load();
 $app = AppFactory::create();
 
 $app->addBodyParsingMiddleware();
+$app->addRoutingMiddleware();
 $app->addErrorMiddleware(true, true, true);
 
 // CORS middleware handling

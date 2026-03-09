@@ -44,9 +44,11 @@ class SupabaseAuth
      */
     public function getGoogleSignInUrl(): string
     {
+        // Redirect to the React frontend — it parses the #access_token from the hash
+        $clientUrl = $_ENV['CLIENT_URL'] ?? $this->siteUrl;
         $params = http_build_query([
             'provider' => 'google',
-            'redirect_to' => $this->siteUrl . '/auth/callback'
+            'redirect_to' => $clientUrl . '/auth/callback'
         ]);
 
         return $this->supabaseUrl . '/auth/v1/authorize?' . $params;
@@ -90,7 +92,13 @@ class SupabaseAuth
     {
         $queryString = '';
         if (!empty($params)) {
-            $queryString = '?' . http_build_query($params);
+            // Build query string manually — http_build_query encodes characters
+            // like *, (, ) and , which Supabase needs unencoded in its filter syntax
+            $parts = [];
+            foreach ($params as $key => $value) {
+                $parts[] = urlencode($key) . '=' . $value;
+            }
+            $queryString = '?' . implode('&', $parts);
         }
 
         return $this->makeRequest('GET', '/rest/v1/' . $table . $queryString);
