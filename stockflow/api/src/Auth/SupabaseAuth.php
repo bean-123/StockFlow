@@ -102,10 +102,81 @@ class SupabaseAuth
         return $this->makeRequest('POST', '/rest/v1/' . $table, $data);
     }
 
+    /** Update rows in a table. Uses PATCH for partial updates. */
+    public function update(string $table, string $filter, array $data): array
+    {
+        return $this->makeRequest('PATCH', '/rest/v1/' . $table . '?' . $filter, $data);
+    }
+
     /** Delete from a table. Identical to the original. */
     public function delete(string $table, string $filter): array
     {
         return $this->makeRequest('DELETE', '/rest/v1/' . $table . '?' . $filter);
+    }
+
+    /**
+     * Upload a file to Supabase Storage.
+     *
+     * Supabase Storage API:
+     *   POST /storage/v1/object/{bucket}/{path}
+     *   Body: raw file bytes
+     *   Headers: Content-Type must match the file's MIME type
+     *
+     * @param string $bucket    The storage bucket name (e.g., 'product-images')
+     * @param string $path      The file path within the bucket (e.g., 'my-photo.jpg')
+     * @param string $fileData  The raw file contents (from file_get_contents or stream)
+     * @param string $mimeType  The file's MIME type (e.g., 'image/jpeg')
+     * @return array            The Supabase response (contains Key, Id, etc.)
+     */
+    public function uploadFile(string $bucket, string $path, string $fileData, string $mimeType): array
+    {
+        $url = $this->supabaseUrl . '/storage/v1/object/' . $bucket . '/' . $path;
+
+        $headers = [
+            'apikey: ' . $this->supabaseKey,
+            'Content-Type: ' . $mimeType,
+        ];
+
+        if ($this->accessToken) {
+            $headers[] = 'Authorization: Bearer ' . $this->accessToken;
+        }
+
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CUSTOMREQUEST => 'POST',
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_POSTFIELDS => $fileData,
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+
+        if ($error) {
+            throw new \Exception("cURL error: " . $error);
+        }
+
+        $decoded = json_decode($response, true) ?? [];
+
+        if ($httpCode >= 400) {
+            $errorMsg = $decoded['message']
+                ?? $decoded['error']
+                ?? $response;
+            throw new \Exception("Storage error ($httpCode): " . $errorMsg);
+        }
+
+        return $decoded;
+    }
+
+    /**
+     * Get the public URL for a file in Supabase Storage.
+     * Only works for public buckets.
+     */
+    public function getPublicUrl(string $bucket, string $path): string
+    {
+        return $this->supabaseUrl . '/storage/v1/object/public/' . $bucket . '/' . $path;
     }
 
     /**
@@ -125,8 +196,8 @@ class SupabaseAuth
             $headers[] = 'Authorization: Bearer ' . $this->accessToken;
         }
 
-        // For inserts, tell Supabase to return the created row
-        if ($method === 'POST' && strpos($endpoint, '/rest/v1/') !== false) {
+        // For inserts and updates, tell Supabase to return the affected row(s)
+        if (in_array($method, ['POST', 'PATCH']) && strpos($endpoint, '/rest/v1/') !== false) {
             $headers[] = 'Prefer: return=representation';
         }
 
