@@ -36,6 +36,23 @@ export default function ProductList() {
     setLoading(true);
     setError(null);
 
+    const handleDelete = async (id) => {
+      const confirmed = window.confirm(
+        "Are you sure you want to delete this product?",
+      );
+
+      if (!confirmed) return;
+
+      try {
+        await api.deleteProduct(id);
+
+        // Force re-fetch
+        setRefreshKey((prev) => prev + 1);
+      } catch (err) {
+        alert("Error deleting product: " + err.message);
+      }
+    };
+
     const params = {};
     if (search) params.search = search;
     if (category) params.category = category;

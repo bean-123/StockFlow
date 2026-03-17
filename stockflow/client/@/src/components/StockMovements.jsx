@@ -44,7 +44,7 @@ export default function StockMovements() {
 
   const fetchProducts = () => {
     api
-      .getProducts()
+      .getProducts({ limit: 100 })
       .then((data) => setProducts(Array.isArray(data) ? data : data.data || []))
       .catch(() => {});
   };

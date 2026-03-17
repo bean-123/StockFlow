@@ -1,23 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../services/api";
 
-/**
- * ProductForm — Create or edit a product with image upload
- *
- * WHAT THIS COMPONENT DOES:
- * - Shows a form with fields for product data
- * - Allows selecting an image file to upload
- * - Uploads the image first (POST /api/products/upload-image), gets back a URL
- * - Then creates/updates the product with the image_url included
- * - Displays success/error messages from the backend
- *
- * WHAT STUDENTS NEED TO DO ON THE BACKEND:
- * - Exercise 4: Build POST /api/products and PUT /api/products/{id}
- * - Exercise 8: Build POST /api/products/upload-image
- *   - Validate file type and size
- *   - Upload to Supabase Storage
- *   - Return the public URL
- */
 export default function ProductForm({ product = null, onSaved = () => {} }) {
   const isEdit = !!product;
 
@@ -26,14 +9,12 @@ export default function ProductForm({ product = null, onSaved = () => {} }) {
     sku: product?.sku || "",
     price: product?.price || "",
     description: product?.description || "",
-    category_id: product?.category_id || "",
+    category_id: product?.category_id ? String(product.category_id) : "",
   });
 
-  // Image state
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(product?.image_url || null);
   const [uploading, setUploading] = useState(false);
-
   const [categories, setCategories] = useState([]);
   const [message, setMessage] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -49,32 +30,25 @@ export default function ProductForm({ product = null, onSaved = () => {} }) {
           return;
         }
 
-        // Empty table -> try to seed default categories and re-fetch
         return api.seedCategories().then((seeded) => {
           const after = Array.isArray(seeded) ? seeded : seeded.data || [];
-          if (after.length > 0) {
-            setCategories(after);
-          } else {
-            setCategories([{ id: "", name: "No categories available" }]);
-          }
+          if (after.length > 0) setCategories(after);
+          else setCategories([{ id: "", name: "No categories available" }]);
         });
       })
-      .catch(() => {
-        setCategories([{ id: "", name: "No categories available" }]);
-      });
+      .catch(() =>
+        setCategories([{ id: "", name: "No categories available" }]),
+      );
   }, []);
 
-  const handleChange = (e) => {
+  const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
-  };
 
-  // When a file is selected, show a local preview
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     setImageFile(file);
-    // Create a local preview URL (this is a browser-only URL, not uploaded yet)
     setImagePreview(URL.createObjectURL(file));
   };
 
@@ -86,8 +60,6 @@ export default function ProductForm({ product = null, onSaved = () => {} }) {
     try {
       let imageUrl = product?.image_url || null;
 
-      // Step 1: If a new image was selected, upload it first
-      // This calls POST /api/products/upload-image (Exercise 8)
       if (imageFile) {
         setUploading(true);
         const uploadResult = await api.uploadProductImage(imageFile);
@@ -95,18 +67,8 @@ export default function ProductForm({ product = null, onSaved = () => {} }) {
         setUploading(false);
       }
 
-      // Step 2: Create or update the product with the image_url
       const productData = { ...form };
-      if (imageUrl) {
-        productData.image_url = imageUrl;
-      }
-
-      // Remove invalid or placeholder category selections when categories are not provided by DB.
-      if (
-        !categories.some((cat) => cat.id && cat.id === productData.category_id)
-      ) {
-        delete productData.category_id;
-      }
+      if (imageUrl) productData.image_url = imageUrl;
 
       if (isEdit) {
         await api.updateProduct(product.id, productData);
@@ -124,12 +86,29 @@ export default function ProductForm({ product = null, onSaved = () => {} }) {
         setImageFile(null);
         setImagePreview(null);
       }
+
       onSaved();
     } catch (err) {
       setMessage({ type: "error", text: err.message });
       setUploading(false);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // 🔥 New: Delete handler
+  const handleDelete = async () => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this product?",
+    );
+    if (!confirmed) return;
+
+    try {
+      await api.deleteProduct(product.id);
+      setMessage({ type: "success", text: "Product deleted!" });
+      onSaved(); // Close form + refresh list
+    } catch (err) {
+      setMessage({ type: "error", text: err.message });
     }
   };
 
@@ -190,18 +169,17 @@ export default function ProductForm({ product = null, onSaved = () => {} }) {
           <option value="">Select category...</option>
           {categories.length > 0 ? (
             categories.map((cat) => (
-              <option key={cat.id} value={cat.id}>
+              <option key={cat.id} value={String(cat.id)}>
                 {cat.name}
               </option>
             ))
           ) : (
             <option value="" disabled>
-              No categories available (add categories in DB first)
+              No categories available
             </option>
           )}
         </select>
 
-        {/* Image upload */}
         <label style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
           <span>Product Image</span>
           <input
@@ -211,7 +189,6 @@ export default function ProductForm({ product = null, onSaved = () => {} }) {
           />
         </label>
 
-        {/* Image preview */}
         {imagePreview && (
           <div>
             <img
@@ -236,6 +213,17 @@ export default function ProductForm({ product = null, onSaved = () => {} }) {
                 ? "Update Product"
                 : "Create Product"}
         </button>
+
+        {/* 🔥 Delete button only when editing */}
+        {isEdit && (
+          <button
+            type="button"
+            onClick={handleDelete}
+            style={{ marginTop: "10px", background: "#ff4d4f", color: "white" }}
+          >
+            Delete Product
+          </button>
+        )}
       </form>
     </div>
   );
