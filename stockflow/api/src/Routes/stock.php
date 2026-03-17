@@ -33,17 +33,47 @@ use StockFlow\Middleware\AuthMiddleware;
 // Replace the body of this route with your own logic.
 $app->get('/api/stock/movements', function (Request $request, Response $response) {
 
-    // TODO: Replace this with real data from Supabase
-    //
-    // $auth = new SupabaseAuth();
-    // $auth->setToken($request->getAttribute('token'));
-    //
-    // TODO: Read optional product_id filter from query params
-    // TODO: Build query with filters
-    // TODO: Post-process dates
-    // TODO: Return as JSON
+    $auth = new SupabaseAuth();
+    $auth->setToken($request->getAttribute('token'));
 
-    $response->getBody()->write(json_encode([]));
+    $queryParams = $request->getQueryParams();
+    $filter = [];
+    if (!empty($queryParams['product_id'])) {
+        $filter['product_id'] = 'eq.' . $queryParams['product_id'];
+    }
+
+    $query = array_merge([
+        'select' => '*,products(name,sku)',
+        'order' => 'created_at.desc'
+    ], $filter);
+
+    $movements = $auth->query('stock_movements', $query);
+
+    $formatted = array_map(function ($row) {
+        $timestamp = isset($row['created_at']) ? strtotime($row['created_at']) : null;
+        $createdDate = $timestamp ? date('j M Y, H:i', $timestamp) : null;
+        $daysAgo = $timestamp ? (int) floor((time() - $timestamp) / 86400) : null;
+
+        if ($daysAgo === 0) {
+            $createdAgo = 'Today';
+        } elseif ($daysAgo === 1) {
+            $createdAgo = 'Yesterday';
+        } elseif ($daysAgo !== null) {
+            $createdAgo = $daysAgo . ' days ago';
+        } else {
+            $createdAgo = null;
+        }
+
+        return array_merge($row, [
+            'created_date' => $createdDate,
+            'created_ago' => $createdAgo,
+            'age_days' => $daysAgo,
+            'product_name' => $row['products']['name'] ?? null,
+            'product_sku' => $row['products']['sku'] ?? null
+        ]);
+    }, $movements ?? []);
+
+    $response->getBody()->write(json_encode($formatted));
     return $response->withHeader('Content-Type', 'application/json');
 
 })->add(new AuthMiddleware());
@@ -83,28 +113,66 @@ $app->get('/api/stock/movements', function (Request $request, Response $response
 // Replace the body of this route with your own logic.
 $app->post('/api/stock/movements', function (Request $request, Response $response) {
 
-    // $body = $request->getParsedBody();
-    //
-    // --- PRE-PROCESSING ---
-    // TODO: Validate required fields
-    // TODO: Check movement_type is valid
-    // TODO: For "out" type, verify enough stock exists
-    //
-    // --- INSERT MOVEMENT ---
-    // $auth = new SupabaseAuth();
-    // $auth->setToken($request->getAttribute('token'));
-    //
-    // TODO: Insert into stock_movements table
-    // TODO: Fetch current product stock_quantity
-    // TODO: Calculate new quantity based on movement_type
-    // TODO: Update product's stock_quantity
-    //
-    // --- POST-PROCESSING ---
-    // TODO: Return the movement and updated stock level
+    $body = $request->getParsedBody();
+    $productId = trim($body['product_id'] ?? '');
+    $quantity = isset($body['quantity']) ? (int) $body['quantity'] : 0;
+    $movementType = trim($body['movement_type'] ?? '');
+    $reason = trim($body['reason'] ?? '');
+    $notes = trim($body['notes'] ?? '');
 
-    $response->getBody()->write(json_encode([
-        'error' => 'Exercise 3: POST /api/stock/movements is not implemented yet'
-    ]));
-    return $response->withStatus(501)->withHeader('Content-Type', 'application/json');
+    if (!$productId || $quantity <= 0) {
+        $response->getBody()->write(json_encode(['error' => 'product_id and quantity (>0) are required']));
+        return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+    }
+
+    $validTypes = ['in', 'out', 'adjustment'];
+    if (!in_array($movementType, $validTypes, true)) {
+        $response->getBody()->write(json_encode(['error' => 'movement_type must be one of: in, out, adjustment']));
+        return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+    }
+
+    $auth = new SupabaseAuth();
+    $auth->setToken($request->getAttribute('token'));
+
+    $products = $auth->query('products', ['id' => 'eq.' . $productId]);
+    if (empty($products)) {
+        $response->getBody()->write(json_encode(['error' => 'Product not found']));
+        return $response->withStatus(404)->withHeader('Content-Type', 'application/json');
+    }
+
+    $currentStock = isset($products[0]['stock_quantity']) ? (int) $products[0]['stock_quantity'] : 0;
+    $newStock = $currentStock;
+
+    if ($movementType === 'in') {
+        $newStock += $quantity;
+    } elseif ($movementType === 'out') {
+        if ($currentStock < $quantity) {
+            $response->getBody()->write(json_encode(['error' => 'Insufficient stock for out movement']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+        $newStock -= $quantity;
+    } else { // adjustment
+        $newStock = $quantity;
+    }
+
+    $movement = $auth->insert('stock_movements', [
+        'product_id' => $productId,
+        'quantity' => $quantity,
+        'movement_type' => $movementType,
+        'reason' => $reason,
+        'notes' => $notes
+    ]);
+
+    $auth->update('products', 'id=eq.' . $productId, ['stock_quantity' => $newStock]);
+
+    $result = [
+        'movement' => $movement[0] ?? null,
+        'product_id' => $productId,
+        'old_stock' => $currentStock,
+        'new_stock' => $newStock
+    ];
+
+    $response->getBody()->write(json_encode($result));
+    return $response->withStatus(201)->withHeader('Content-Type', 'application/json');
 
 })->add(new AuthMiddleware());

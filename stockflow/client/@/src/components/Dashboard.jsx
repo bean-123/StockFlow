@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { api } from '../services/api';
+import { useState, useEffect } from "react";
+import { api } from "../services/api";
 
 /**
  * Dashboard — Summary statistics
@@ -22,36 +22,83 @@ export default function Dashboard() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    api.getDashboardSummary()
-      .then((data) => setSummary(data))
-      .catch((err) => setError(err.message))
+    api
+      .getDashboardSummary()
+      .then((data) => {
+        console.log("Dashboard summary:", data);
+        setSummary(data);
+      })
+      .catch((err) => {
+        console.error("Dashboard summary error:", err);
+        setError(err.message);
+      })
       .finally(() => setLoading(false));
   }, []);
 
   if (loading) return <p>Loading dashboard...</p>;
-  if (error) return <p style={{ color: 'red' }}>Error: {error}</p>;
-  if (!summary) return <p>No data available. Have you built the dashboard endpoint?</p>;
+  if (error) return <p style={{ color: "red" }}>Error: {error}</p>;
+  if (!summary)
+    return <p>No data available. Have you built the dashboard endpoint?</p>;
 
-  const { inventory, orders, low_stock_products } = summary;
+  const {
+    inventory,
+    orders,
+    low_stock_products,
+    no_stock_products,
+    out_of_stock_products,
+  } = summary;
 
   return (
     <div>
       <h2>Dashboard</h2>
 
       {/* Summary Cards */}
-      <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', marginBottom: '20px' }}>
-        <div style={{ padding: '15px', border: '1px solid #444', borderRadius: '8px', minWidth: '200px' }}>
+      <div
+        style={{
+          display: "flex",
+          gap: "15px",
+          flexWrap: "wrap",
+          marginBottom: "20px",
+        }}
+      >
+        <div
+          style={{
+            padding: "15px",
+            border: "1px solid #444",
+            borderRadius: "8px",
+            minWidth: "200px",
+          }}
+        >
           <h4>Inventory</h4>
-          <p>Total Products: <strong>{inventory?.total_products || 0}</strong></p>
-          <p>Total Value: <strong>{inventory?.total_value || '0.00'}</strong></p>
-          <p style={{ color: 'orange' }}>Low Stock: <strong>{inventory?.low_stock_count || 0}</strong></p>
-          <p style={{ color: 'red' }}>Out of Stock: <strong>{inventory?.out_of_stock_count || 0}</strong></p>
+          <p>
+            Total Products: <strong>{inventory?.total_products || 0}</strong>
+          </p>
+          <p>
+            Total Value: <strong>{inventory?.total_value || "0.00"}</strong>
+          </p>
+          <p style={{ color: "orange" }}>
+            Low Stock: <strong>{inventory?.low_stock_count || 0}</strong>
+          </p>
+          <p style={{ color: "red" }}>
+            Out of Stock: <strong>{inventory?.out_of_stock_count || 0}</strong>
+          </p>
         </div>
 
-        <div style={{ padding: '15px', border: '1px solid #444', borderRadius: '8px', minWidth: '200px' }}>
+        <div
+          style={{
+            padding: "15px",
+            border: "1px solid #444",
+            borderRadius: "8px",
+            minWidth: "200px",
+          }}
+        >
           <h4>Orders</h4>
-          <p>Total Orders: <strong>{orders?.total_orders || 0}</strong></p>
-          <p>Revenue: <strong>{orders?.total_revenue || '0.00'}</strong></p>
+          <p>
+            Total Orders: <strong>{orders?.total_orders || 0}</strong>
+          </p>
+          <p>
+            Revenue: <strong>{orders?.total_revenue || "0.00"}</strong>
+          </p>
           {orders?.by_status && (
             <div>
               <p>Draft: {orders.by_status.draft || 0}</p>
@@ -67,9 +114,16 @@ export default function Dashboard() {
       {low_stock_products && low_stock_products.length > 0 && (
         <div>
           <h3>Low Stock Alerts</h3>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', maxWidth: '500px' }}>
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              textAlign: "left",
+              maxWidth: "500px",
+            }}
+          >
             <thead>
-              <tr style={{ borderBottom: '2px solid #555' }}>
+              <tr style={{ borderBottom: "2px solid #555" }}>
                 <th>Product</th>
                 <th>Stock</th>
                 <th>Threshold</th>
@@ -77,9 +131,11 @@ export default function Dashboard() {
             </thead>
             <tbody>
               {low_stock_products.map((p, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #333' }}>
+                <tr key={i} style={{ borderBottom: "1px solid #333" }}>
                   <td>{p.name}</td>
-                  <td style={{ color: p.stock_quantity === 0 ? 'red' : 'orange' }}>
+                  <td
+                    style={{ color: p.stock_quantity === 0 ? "red" : "orange" }}
+                  >
                     {p.stock_quantity}
                   </td>
                   <td>{p.reorder_threshold}</td>
@@ -89,6 +145,39 @@ export default function Dashboard() {
           </table>
         </div>
       )}
+
+      {/* No Stock Products */}
+      {(no_stock_products || out_of_stock_products) &&
+        (no_stock_products || out_of_stock_products).length > 0 && (
+          <div style={{ marginTop: "20px" }}>
+            <h3>Out of Stock Products</h3>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                textAlign: "left",
+                maxWidth: "500px",
+              }}
+            >
+              <thead>
+                <tr style={{ borderBottom: "2px solid #555" }}>
+                  <th>Product</th>
+                  <th>Stock</th>
+                  <th>Threshold</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(out_of_stock_products || no_stock_products).map((p, i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid #333" }}>
+                    <td>{p.name}</td>
+                    <td style={{ color: "red" }}>{p.stock_quantity}</td>
+                    <td>{p.reorder_threshold}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
     </div>
   );
 }

@@ -43,15 +43,42 @@ $app->get('/api/orders', function (Request $request, Response $response) {
     $auth = new SupabaseAuth();
     $auth->setToken($request->getAttribute('token'));
 
-    $orders = $auth->query('orders', [
+    // Exercise 6 Step 1: filter by status with query params
+    $queryParams = $request->getQueryParams();
+    $filter = [
         'order' => 'created_at.desc'
-    ]);
+    ];
+    if (!empty($queryParams['status'])) {
+        $filter['status'] = 'eq.' . trim($queryParams['status']);
+    }
+
+    $orders = $auth->query('orders', $filter);
 
     // --- POST-PROCESSING (Exercise 3) ---
-    // TODO: Format dates and add computed time fields
-    // TODO: Format total_amount as currency
+    $processed = array_map(function ($order) {
+        $timestamp = isset($order['created_at']) ? strtotime($order['created_at']) : null;
+        $createdDate = $timestamp ? date('j M Y, H:i', $timestamp) : null;
+        $daysAgo = $timestamp ? (int) floor((time() - $timestamp) / 86400) : null;
 
-    $response->getBody()->write(json_encode($orders));
+        if ($daysAgo === 0) {
+            $createdAgo = 'Today';
+        } elseif ($daysAgo === 1) {
+            $createdAgo = 'Yesterday';
+        } elseif ($daysAgo !== null) {
+            $createdAgo = $daysAgo . ' days ago';
+        } else {
+            $createdAgo = null;
+        }
+
+        return array_merge($order, [
+            'created_date' => $createdDate,
+            'created_ago' => $createdAgo,
+            'age_days' => $daysAgo,
+            'total_amount' => number_format((float) ($order['total_amount'] ?? 0), 2, '.', '')
+        ]);
+    }, $orders ?? []);
+
+    $response->getBody()->write(json_encode($processed));
     return $response->withHeader('Content-Type', 'application/json');
 })->add(new AuthMiddleware());
 
@@ -120,54 +147,85 @@ $app->get('/api/orders/{id}', function (Request $request, Response $response, ar
 // STUB: Returns "not implemented" until students implement Exercise 6 (Step 3).
 $app->post('/api/orders', function (Request $request, Response $response) {
 
-    // $body = $request->getParsedBody();
-    //
-    // --- PRE-PROCESSING ---
-    // TODO: Validate customer_name
-    // TODO: Validate items array is not empty
-    // TODO: Validate each item has product_id, quantity, unit_price
-    //
-    // --- CREATE THE ORDER ---
-    // $auth = new SupabaseAuth();
-    // $auth->setToken($request->getAttribute('token'));
-    //
-    // Step 1: Insert the order (total_amount = 0 for now)
-    // $order = $auth->insert('orders', [
-    //     'customer_name' => trim($body['customer_name']),
-    //     'notes' => trim($body['notes'] ?? ''),
-    //     'status' => 'draft',
-    //     'total_amount' => 0
-    // ]);
-    // $orderId = $order[0]['id'];
-    //
-    // Step 2: Insert each item and calculate total
-    // $totalAmount = 0;
-    // foreach ($body['items'] as $item) {
-    //     $lineTotal = $item['quantity'] * $item['unit_price'];
-    //     $totalAmount += $lineTotal;
-    //
-    //     $auth->insert('order_items', [
-    //         'order_id' => $orderId,
-    //         'product_id' => $item['product_id'],
-    //         'product_name' => $item['product_name'],
-    //         'quantity' => (int)$item['quantity'],
-    //         'unit_price' => (float)$item['unit_price'],
-    //         'line_total' => $lineTotal
-    //     ]);
-    // }
-    //
-    // Step 3: Update the order with the calculated total
-    // $auth->update('orders', 'id=eq.' . $orderId, [
-    //     'total_amount' => $totalAmount
-    // ]);
-    //
-    // --- POST-PROCESSING ---
-    // TODO: Return the order with its items and 201 status
+    $body = $request->getParsedBody();
+    $customerName = trim($body['customer_name'] ?? '');
+    $notes = trim($body['notes'] ?? '');
+    $items = $body['items'] ?? [];
 
-    $response->getBody()->write(json_encode([
-        'error' => 'Exercise 6: POST /api/orders is not implemented yet'
-    ]));
-    return $response->withStatus(501)->withHeader('Content-Type', 'application/json');
+    if (!$customerName) {
+        $response->getBody()->write(json_encode(['error' => 'customer_name is required']));
+        return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+    }
+
+    if (!is_array($items) || count($items) === 0) {
+        $response->getBody()->write(json_encode(['error' => 'items array must be provided and non-empty']));
+        return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+    }
+
+    foreach ($items as $item) {
+        if (empty($item['product_id']) || !isset($item['quantity']) || !isset($item['unit_price'])) {
+            $response->getBody()->write(json_encode(['error' => 'Each item must include product_id, quantity, and unit_price']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        if ((int)$item['quantity'] <= 0 || (float)$item['unit_price'] < 0) {
+            $response->getBody()->write(json_encode(['error' => 'Item quantity must be >0 and unit_price must be >=0']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+    }
+
+    $auth = new SupabaseAuth();
+    $auth->setToken($request->getAttribute('token'));
+
+    // Insert order with initial total 0
+    $createdOrder = $auth->insert('orders', [
+        'customer_name' => $customerName,
+        'notes' => $notes,
+        'status' => 'draft',
+        'total_amount' => 0
+    ]);
+
+    if (empty($createdOrder) || empty($createdOrder[0]['id'])) {
+        $response->getBody()->write(json_encode(['error' => 'Failed to create order']));
+        return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
+    }
+
+    $orderId = $createdOrder[0]['id'];
+    $totalAmount = 0;
+
+    foreach ($items as $item) {
+        $quantity = (int)$item['quantity'];
+        $unitPrice = (float)$item['unit_price'];
+        $lineTotal = $quantity * $unitPrice;
+        $totalAmount += $lineTotal;
+
+        $auth->insert('order_items', [
+            'order_id' => $orderId,
+            'product_id' => $item['product_id'],
+            'product_name' => $item['product_name'] ?? '',
+            'quantity' => $quantity,
+            'unit_price' => $unitPrice,
+            'line_total' => $lineTotal
+        ]);
+    }
+
+    $auth->update('orders', 'id=eq.' . $orderId, ['total_amount' => $totalAmount]);
+
+    $order = $auth->query('orders', ['id' => 'eq.' . $orderId]);
+    $orderItems = $auth->query('order_items', ['order_id' => 'eq.' . $orderId]);
+
+    $resultOrder = $order[0] ?? null;
+    if ($resultOrder) {
+        $resultOrder['items'] = $orderItems;
+        $resultOrder['created_date'] = isset($resultOrder['created_at']) ? date('j M Y, H:i', strtotime($resultOrder['created_at'])) : null;
+        $timestamp = isset($resultOrder['created_at']) ? strtotime($resultOrder['created_at']) : null;
+        $daysAgo = $timestamp ? (int) floor((time() - $timestamp) / 86400) : null;
+        $resultOrder['created_ago'] = $daysAgo === 0 ? 'Today' : ($daysAgo === 1 ? 'Yesterday' : ($daysAgo !== null ? $daysAgo . ' days ago' : null));
+        $resultOrder['total_amount'] = number_format((float)$totalAmount, 2, '.', '');
+    }
+
+    $response->getBody()->write(json_encode($resultOrder));
+    return $response->withStatus(201)->withHeader('Content-Type', 'application/json');
 
 })->add(new AuthMiddleware());
 
@@ -196,18 +254,51 @@ $app->post('/api/orders', function (Request $request, Response $response) {
 // STUB: Returns "not implemented" until students implement Exercise 6 (Step 4).
 $app->put('/api/orders/{id}/status', function (Request $request, Response $response, array $args) {
 
-    // $id = $args['id'];
-    // $body = $request->getParsedBody();
-    // $newStatus = $body['status'] ?? null;
-    //
-    // TODO: Validate that newStatus is one of: draft, confirmed, fulfilled, cancelled
-    // TODO: Fetch current order and check current status
-    // TODO: Check if transition is valid
-    // TODO: Update and return result
+    $id = $args['id'];
+    $body = $request->getParsedBody();
+    $newStatus = trim($body['status'] ?? '');
 
-    $response->getBody()->write(json_encode([
-        'error' => 'Exercise 6: PUT /api/orders/{id}/status is not implemented yet'
-    ]));
-    return $response->withStatus(501)->withHeader('Content-Type', 'application/json');
+    $allowed = ['draft', 'confirmed', 'fulfilled', 'cancelled'];
+    if (!$id || !in_array($newStatus, $allowed, true)) {
+        $response->getBody()->write(json_encode(['error' => 'Invalid status or missing order id']));
+        return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+    }
+
+    $auth = new SupabaseAuth();
+    $auth->setToken($request->getAttribute('token'));
+
+    $orders = $auth->query('orders', ['id' => 'eq.' . $id]);
+    if (empty($orders)) {
+        $response->getBody()->write(json_encode(['error' => 'Order not found']));
+        return $response->withStatus(404)->withHeader('Content-Type', 'application/json');
+    }
+
+    $currentStatus = $orders[0]['status'] ?? 'draft';
+
+    $validTransitions = [
+        'draft' => ['confirmed', 'cancelled'],
+        'confirmed' => ['fulfilled', 'cancelled'],
+        'fulfilled' => [],
+        'cancelled' => []
+    ];
+
+    if (!isset($validTransitions[$currentStatus]) || !in_array($newStatus, $validTransitions[$currentStatus], true)) {
+        $response->getBody()->write(json_encode(['error' => "Cannot change status from $currentStatus to $newStatus"]));
+        return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+    }
+
+    $auth->update('orders', 'id=eq.' . $id, ['status' => $newStatus]);
+
+    $updated = $auth->query('orders', ['id' => 'eq.' . $id]);
+    $order = $updated[0] ?? [];
+
+    $timestamp = isset($order['created_at']) ? strtotime($order['created_at']) : null;
+    $order['created_date'] = $timestamp ? date('j M Y, H:i', $timestamp) : null;
+    $daysAgo = $timestamp ? (int) floor((time() - $timestamp) / 86400) : null;
+    $order['created_ago'] = $daysAgo === 0 ? 'Today' : ($daysAgo === 1 ? 'Yesterday' : ($daysAgo !== null ? $daysAgo . ' days ago' : null));
+    $order['total_amount'] = number_format((float)($order['total_amount'] ?? 0), 2, '.', '');
+
+    $response->getBody()->write(json_encode($order));
+    return $response->withHeader('Content-Type', 'application/json');
 
 })->add(new AuthMiddleware());

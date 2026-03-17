@@ -3,6 +3,7 @@
 ## Setup
 
 ### 1. Start the PHP backend
+
 ```bash
 cd stockflow/api
 composer install           # Install dependencies (first time only)
@@ -10,6 +11,7 @@ php -S localhost:8005 -t public/
 ```
 
 ### 2. Start the React frontend
+
 ```bash
 cd stockflow/client/@
 npm install                # Install dependencies (first time only)
@@ -55,6 +57,7 @@ USING (bucket_id = 'product-images' AND auth.uid() IS NOT NULL);
 > **Note:** The `image_url` column already exists in the `products` table — no ALTER TABLE needed.
 
 ### 5. Check it works
+
 - Open http://localhost:5174 — you should see the Products tab
 - Products should load from the API (names, SKUs, prices)
 - The "Status" column will show "—" until you complete Exercise 1
@@ -67,24 +70,27 @@ USING (bucket_id = 'product-images' AND auth.uid() IS NOT NULL);
 The frontend is **already built**. Your job is to write the **PHP backend** code.
 
 Each exercise tells you:
+
 - **Which PHP file** to edit
 - **What the frontend expects** (the JSON structure)
 - **Hints** for how to implement it
 
 ### Key files
-| File | Purpose |
-|------|---------|
-| `api/src/Routes/_route_examples.php` | **Read this first!** Full examples of GET, POST, PUT, DELETE routes |
-| `api/src/Routes/products.php` | Exercises 1, 2, 4, 5 |
-| `api/src/Routes/orders.php` | Exercises 3, 6 |
-| `api/src/Routes/stock.php` | Exercise 3 |
-| `api/src/Routes/dashboard.php` | Exercise 7 |
-| `api/src/Routes/ai.php` | Exercise 8 |
-| `api/src/Auth/SupabaseAuth.php` | Database + storage access (query, insert, update, delete, uploadFile) |
-| `api/src/AI/GeminiAI.php` | Gemini API wrapper (already built) |
-| `api/public/index.php` | App entry point — middleware setup, CORS, route loading (do not edit) |
+
+| File                                 | Purpose                                                               |
+| ------------------------------------ | --------------------------------------------------------------------- |
+| `api/src/Routes/_route_examples.php` | **Read this first!** Full examples of GET, POST, PUT, DELETE routes   |
+| `api/src/Routes/products.php`        | Exercises 1, 2, 4, 5                                                  |
+| `api/src/Routes/orders.php`          | Exercises 3, 6                                                        |
+| `api/src/Routes/stock.php`           | Exercise 3                                                            |
+| `api/src/Routes/dashboard.php`       | Exercise 7                                                            |
+| `api/src/Routes/ai.php`              | Exercise 8                                                            |
+| `api/src/Auth/SupabaseAuth.php`      | Database + storage access (query, insert, update, delete, uploadFile) |
+| `api/src/AI/GeminiAI.php`            | Gemini API wrapper (already built)                                    |
+| `api/public/index.php`               | App entry point — middleware setup, CORS, route loading (do not edit) |
 
 ### SupabaseAuth Quick Reference
+
 ```php
 $auth = new SupabaseAuth();
 $auth->setToken($request->getAttribute('token'));  // For protected routes
@@ -127,13 +133,27 @@ After fetching products from Supabase, loop through them and add:
 5. Remove fields the frontend doesn't need: `supplier`, `reorder_threshold`
 
 **PHP hint:**
+
 ```php
+<?php
 $processed = array_map(function ($product) {
+    $stockQuantity = (int) ($product['stock_quantity'] ?? 0);
+    $reorderThreshold = (int) ($product['reorder_threshold'] ?? 0);
+
+    if ($stockQuantity <= 0) { $stockStatus = 'out_of_stock'; }
+    elseif ($stockQuantity <= $reorderThreshold) { $stockStatus = 'low_stock'; }
+    else { $stockStatus = 'in_stock'; }
+
     return [
-        'id' => $product['id'],
-        'name' => $product['name'],
-        'image_url' => $product['image_url'],
-        // ... add your fields here
+        'id' => $product['id'] ?? null,
+        'name' => $product['name'] ?? '',
+        'sku' => $product['sku'] ?? '',
+        'price' => number_format((float) ($product['price'] ?? 0), 2, '.', ''),
+        'stock_quantity' => $stockQuantity,
+        'stock_status' => $stockStatus,
+        'category_name' => $product['categories']['name'] ?? 'Uncategorized',
+        'image_url' => $product['image_url'] ?? null,
+        // plus other kept fields
     ];
 }, $products);
 ```
@@ -170,12 +190,15 @@ The frontend already sends query params when you type in the search box or chang
 **File:** `api/src/Routes/stock.php` — build both routes
 
 ### Step 1: Format order dates
+
 In the orders route, add post-processing:
+
 1. **`created_date`** — Human-readable format: `"9 Mar 2026, 14:30"`
 2. **`created_ago`** — Relative time: `"2 days ago"`, `"Today"`, `"Yesterday"`
 3. **`total_amount`** — Format with 2 decimal places
 
 **PHP date/time hints:**
+
 ```php
 $timestamp = strtotime($row['created_at']);
 $formatted = date('j M Y, H:i', $timestamp);
@@ -187,14 +210,18 @@ else $relative = $daysAgo . ' days ago';
 ```
 
 ### Step 2: Build GET /api/stock/movements
+
 Replace the stub route in `stock.php` and implement it:
+
 - Query the `stock_movements` table
 - Join with products: `'select' => '*,products(name,sku)'`
 - Format dates the same way as orders
 - Flatten `products.name` into `product_name`
 
 ### Step 3: Build POST /api/stock/movements
+
 Replace the stub and implement:
+
 - Validate: `product_id`, `quantity` (> 0), `movement_type` (in/out/adjustment)
 - Insert into `stock_movements`
 - Fetch the product's current `stock_quantity`
@@ -212,11 +239,13 @@ Replace the stub and implement:
 **File:** `api/src/Routes/products.php` — replace each stub route with your implementation
 
 ### Step 1: GET /api/products/{id}
+
 - Fetch a single product by UUID
 - Return 404 if not found
 - Include category info
 
 ### Step 2: POST /api/products
+
 - Validate required fields: `name`, `sku`, `price`
 - Sanitize: `trim()` strings, cast `price` to `(float)`
 - Include `image_url` if it was sent (from Exercise 5)
@@ -224,12 +253,14 @@ Replace the stub and implement:
 - Return 201 status
 
 ### Step 3: PUT /api/products/{id}
+
 - Only update fields that were sent
 - Include `image_url` if a new image was uploaded
 - Validate that at least one field was provided
 - Use `$auth->update()`
 
 ### Step 4: DELETE /api/products/{id}
+
 - Choose: hard delete with `$auth->delete()` or soft delete (set status to 'archived')
 - Return confirmation message
 
@@ -244,24 +275,30 @@ Replace the stub and implement:
 **File:** `api/src/Routes/products.php` — the `POST /api/products/upload-image` route
 
 **Prerequisites:**
+
 - Make sure you ran the Supabase Storage SQL from the Setup section above
 - Exercise 4 should be completed first (so products can be created/updated with image_url)
 
 ### How it works
+
 The frontend uses a two-step process:
+
 1. Upload the image file → backend saves it to Supabase Storage → returns a public URL
 2. Create/update the product with the `image_url` field set to that URL
 
 ### What to do
+
 Replace the stub route for `POST /api/products/upload-image`:
 
 1. **Get the uploaded file:**
+
    ```php
    $files = $request->getUploadedFiles();
    $file = $files['image'] ?? null;
    ```
 
 2. **Validate the upload:**
+
    ```php
    // Check file exists and uploaded OK
    if (!$file || $file->getError() !== UPLOAD_ERR_OK) {
@@ -281,12 +318,14 @@ Replace the stub route for `POST /api/products/upload-image`:
    ```
 
 3. **Generate a unique filename:**
+
    ```php
    // uniqid() gives a unique prefix so files don't overwrite each other
    $filename = uniqid() . '-' . $file->getClientFilename();
    ```
 
 4. **Upload to Supabase Storage:**
+
    ```php
    $auth = new SupabaseAuth();
    $auth->setToken($request->getAttribute('token'));
@@ -296,6 +335,7 @@ Replace the stub route for `POST /api/products/upload-image`:
    ```
 
 5. **Return the public URL:**
+
    ```php
    $publicUrl = $auth->getPublicUrl('product-images', $filename);
 
@@ -304,7 +344,9 @@ Replace the stub route for `POST /api/products/upload-image`:
    ```
 
 ### Then update your product CRUD routes
+
 In the `POST /api/products` and `PUT /api/products/{id}` routes (Exercise 4), make sure to include `image_url` in the data you send to Supabase:
+
 ```php
 $data = [
     'name' => trim($body['name']),
@@ -326,14 +368,18 @@ $data = [
 **File:** `api/src/Routes/orders.php` — replace each stub route with your implementation
 
 ### Step 1: Filter orders by status
+
 Add query param support to the existing `GET /api/orders` route.
 
 ### Step 2: GET /api/orders/{id}
+
 - Fetch the order AND its order_items (two queries, combined in PHP)
 - Return as: `{ ...order, items: [...] }`
 
 ### Step 3: POST /api/orders (hardest exercise)
+
 This creates an order with its items. Three database operations:
+
 1. Insert the order (with `total_amount: 0`)
 2. Loop items: calculate `line_total`, insert each into `order_items`
 3. Update the order's `total_amount` with the sum of line totals
@@ -341,13 +387,16 @@ This creates an order with its items. Three database operations:
 **Important:** Calculate the total on the backend, not the frontend! Never trust client-side math for financial data.
 
 ### Step 4: PUT /api/orders/{id}/status
+
 Implement a state machine — only allow valid transitions:
+
 ```
 draft → confirmed
 draft → cancelled
 confirmed → fulfilled
 confirmed → cancelled
 ```
+
 Return 400 with an error message for invalid transitions (e.g., "Cannot change from fulfilled to draft").
 
 **Test it:** Go to "+ Order" tab, create an order. Then on the Orders tab, try the Confirm/Fulfill/Cancel buttons.
@@ -363,18 +412,19 @@ Return 400 with an error message for invalid transitions (e.g., "Cannot change f
 This combines everything you've learned: fetching data, filtering, calculating, and formatting.
 
 **What to return:**
+
 ```json
 {
   "inventory": {
     "total_products": 18,
-    "total_value": 12450.00,
+    "total_value": 12450.0,
     "low_stock_count": 4,
     "out_of_stock_count": 2
   },
   "orders": {
     "total_orders": 5,
     "by_status": { "draft": 1, "confirmed": 1, "fulfilled": 2, "cancelled": 1 },
-    "total_revenue": 2602.00
+    "total_revenue": 2602.0
   },
   "low_stock_products": [
     { "name": "USB-C Hub Pro", "stock_quantity": 2, "reorder_threshold": 10 }
@@ -383,6 +433,7 @@ This combines everything you've learned: fetching data, filtering, calculating, 
 ```
 
 **PHP hints:**
+
 ```php
 // Count items matching a condition
 $outOfStock = count(array_filter($products, fn($p) => $p['stock_quantity'] == 0));
@@ -413,6 +464,7 @@ $top5 = array_slice($lowStock, 0, 5);
 The `GeminiAI` class is already built at `api/src/AI/GeminiAI.php`. You just need to use it.
 
 ### Step 1: POST /api/ai/describe
+
 - Fetch the product by ID from Supabase
 - Build a prompt: "Write a 2-3 sentence product description for: {name}. Category: {category}. Price: {price} EUR."
 - Send to Gemini: `$ai = new GeminiAI(); $result = $ai->ask($prompt);`
@@ -420,6 +472,7 @@ The `GeminiAI` class is already built at `api/src/AI/GeminiAI.php`. You just nee
 - Wrap in try/catch for error handling
 
 ### Step 2: POST /api/ai/stock-advice
+
 - Fetch all products
 - Filter in PHP: keep only products where `stock_quantity <= reorder_threshold`
 - Build a prompt listing the low-stock items
@@ -427,6 +480,7 @@ The `GeminiAI` class is already built at `api/src/AI/GeminiAI.php`. You just nee
 - Return: `{ "advice": "...", "products": [...] }`
 
 ### Step 3 (Stretch): POST /api/ai/summarize-orders
+
 - Fetch orders, build a summary prompt, return AI analysis
 
 **Test it:** Go to the AI tab, select a product and click Generate. Try the Stock Advice button.
@@ -435,17 +489,17 @@ The `GeminiAI` class is already built at `api/src/AI/GeminiAI.php`. You just nee
 
 ## Exercise Order (Recommended)
 
-| Order | Exercise | Difficulty | Builds on |
-|-------|----------|------------|-----------|
-| 1st | Exercise 1 — Pre-processing | Easy | — |
-| 2nd | Exercise 2 — Search & Filter | Easy-Medium | Exercise 1 |
-| 3rd | Exercise 3 — Dates (orders) | Medium | Exercise 1 |
-| 4th | Exercise 4 — CRUD Products | Medium | Exercises 1-2 |
-| 5th | Exercise 5 — Image Upload | Medium | Exercise 4 |
-| 6th | Exercise 3 — Dates (stock) | Medium | Exercises 3-4 |
-| 7th | Exercise 6 — CRUD Orders | Hard | Exercises 3-4 |
-| 8th | Exercise 7 — Dashboard | Medium-Hard | Exercises 1-6 |
-| 9th | Exercise 8 — AI Integration | Medium | Exercise 4 |
+| Order | Exercise                     | Difficulty  | Builds on     |
+| ----- | ---------------------------- | ----------- | ------------- |
+| 1st   | Exercise 1 — Pre-processing  | Easy        | —             |
+| 2nd   | Exercise 2 — Search & Filter | Easy-Medium | Exercise 1    |
+| 3rd   | Exercise 3 — Dates (orders)  | Medium      | Exercise 1    |
+| 4th   | Exercise 4 — CRUD Products   | Medium      | Exercises 1-2 |
+| 5th   | Exercise 5 — Image Upload    | Medium      | Exercise 4    |
+| 6th   | Exercise 3 — Dates (stock)   | Medium      | Exercises 3-4 |
+| 7th   | Exercise 6 — CRUD Orders     | Hard        | Exercises 3-4 |
+| 8th   | Exercise 7 — Dashboard       | Medium-Hard | Exercises 1-6 |
+| 9th   | Exercise 8 — AI Integration  | Medium      | Exercise 4    |
 
 ---
 
