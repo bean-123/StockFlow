@@ -27,6 +27,10 @@ export default function ProductList() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [status, setStatus] = useState("active");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [hasNext, setHasNext] = useState(false);
+  const [hasPrev, setHasPrev] = useState(false);
 
   const fetchProducts = () => {
     setLoading(true);
@@ -36,20 +40,31 @@ export default function ProductList() {
     if (search) params.search = search;
     if (category) params.category = category;
     if (status) params.status = status;
+    params.page = page;
+    params.limit = limit;
 
     api
       .getProducts(params)
       .then((data) => {
-        setProducts(Array.isArray(data) ? data : data.data || []);
+        const productsData = Array.isArray(data) ? data : data.data || [];
+        setProducts(productsData);
+
+        if (typeof data === "object" && data !== null && !Array.isArray(data)) {
+          setHasNext(Boolean(data.hasNext));
+          setHasPrev(Boolean(data.hasPrev));
+        } else {
+          setHasNext(productsData.length === limit);
+          setHasPrev(page > 1);
+        }
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   };
 
-  // Fetch products when filters or refresh key change
+  // Fetch products when filters/paging/refresh changes
   useEffect(() => {
     fetchProducts();
-  }, [search, category, status, refreshKey]);
+  }, [search, category, status, page, limit, refreshKey]);
 
   return (
     <div>
@@ -229,6 +244,44 @@ export default function ProductList() {
           </div>
         </div>
       )}
+
+      {!loading && !error && (
+        <div
+          style={{
+            display: "flex",
+            gap: "12px",
+            alignItems: "center",
+            marginTop: "16px",
+          }}
+        >
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={!hasPrev}
+          >
+            Previous
+          </button>
+          <span>
+            Page {page} • Limit {limit}
+          </span>
+          <button onClick={() => setPage((p) => p + 1)} disabled={!hasNext}>
+            Next
+          </button>
+          <select
+            value={limit}
+            onChange={(e) => {
+              setLimit(Number(e.target.value));
+              setPage(1);
+            }}
+          >
+            {[5, 10, 20, 50].map((value) => (
+              <option key={value} value={value}>
+                {value} per page
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {!loading && !error && products.length === 0 && <p>No products found.</p>}
     </div>
   );

@@ -85,7 +85,8 @@ $app->get('/api/products', function (Request $request, Response $response) {
     $queryParams = [
         'select' => '*',
         'order' => $sort . '.' . $order,
-        'limit' => $limit,
+        // Fetch one extra row to detect whether a next page exists
+        'limit' => $limit + 1,
         'offset' => ($page - 1) * $limit,
     ];
 
@@ -155,7 +156,21 @@ $app->get('/api/products', function (Request $request, Response $response) {
         ];
     }, $products);
 
-    $response->getBody()->write(json_encode($processed));
+    // Detect next page using the extra row fetched in query
+    $hasNext = count($processed) > $limit;
+    if ($hasNext) {
+        $processed = array_slice($processed, 0, $limit);
+    }
+
+    $payload = [
+        'data' => $processed,
+        'page' => $page,
+        'limit' => $limit,
+        'hasNext' => $hasNext,
+        'hasPrev' => $page > 1,
+    ];
+
+    $response->getBody()->write(json_encode($payload));
     return $response->withHeader('Content-Type', 'application/json');
 });
 
