@@ -1,7 +1,20 @@
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8005/api";
 
 async function fetchApi(endpoint, options = {}) {
-  const token = localStorage.getItem("supabase_token");
+  let token = localStorage.getItem("supabase_token");
+
+  // Some auth redirects can land with a token in the URL hash.
+  // If localStorage doesn't yet have it, extract and persist.
+  if (!token && typeof window !== "undefined") {
+    const hash = window.location.hash;
+    if (hash && hash.includes("access_token")) {
+      const params = new URLSearchParams(hash.substring(1));
+      token = params.get("access_token");
+      if (token) {
+        localStorage.setItem("supabase_token", token);
+      }
+    }
+  }
 
   // Don't set Content-Type for FormData — the browser sets it automatically
   // with the correct multipart boundary

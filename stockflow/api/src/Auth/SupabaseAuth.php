@@ -48,7 +48,8 @@ class SupabaseAuth
         $clientUrl = $_ENV['CLIENT_URL'] ?? $this->siteUrl;
         $params = http_build_query([
             'provider' => 'google',
-            'redirect_to' => $clientUrl . '/auth/callback'
+            // Redirect to root where App.jsx has hash handling logic
+            'redirect_to' => $clientUrl
         ]);
 
         return $this->supabaseUrl . '/auth/v1/authorize?' . $params;

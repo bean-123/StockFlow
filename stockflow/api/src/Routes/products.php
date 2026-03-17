@@ -55,7 +55,7 @@ $app->get('/api/products', function (Request $request, Response $response) {
     $sort = trim((string) ($params['sort'] ?? 'name'));
     $order = strtolower(trim((string) ($params['order'] ?? 'asc')));
     $page = max(1, (int) ($params['page'] ?? 1));
-    $limit = max(1, min(100, (int) ($params['limit'] ?? 50)));
+    $limit = max(1, min(100, (int) ($params['limit'] ?? 10)));
 
     $allowedSortFields = ['name', 'price', 'stock_quantity', 'created_at'];
     if (!in_array($sort, $allowedSortFields)) {
@@ -593,59 +593,43 @@ $app->delete('/api/products/{id}', function (Request $request, Response $respons
 //   - Bucket name: 'product-images' (must be created in Supabase first — see TASKS.md)
 // ============================================================
 
+// STUB: Returns "not implemented" until students implement Exercise 5.
 $app->post('/api/products/upload-image', function (Request $request, Response $response) {
 
-    $files = $request->getUploadedFiles();
-    $file = $files['image'] ?? null;
+    // $files = $request->getUploadedFiles();
+    // $file = $files['image'] ?? null;
+    //
+    // --- PRE-PROCESSING ---
+    // TODO: Check that a file was uploaded
+    // if (!$file || $file->getError() !== UPLOAD_ERR_OK) { ... return 400 }
+    //
+    // TODO: Validate file type
+    // $allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    // if (!in_array($file->getClientMediaType(), $allowedTypes)) { ... return 400 }
+    //
+    // TODO: Validate file size (max 5MB)
+    // if ($file->getSize() > 5 * 1024 * 1024) { ... return 400 }
+    //
+    // TODO: Generate unique filename
+    // $filename = uniqid() . '-' . $file->getClientFilename();
+    //
+    // --- UPLOAD TO SUPABASE STORAGE ---
+    // $auth = new SupabaseAuth();
+    // $auth->setToken($request->getAttribute('token'));
+    //
+    // $fileData = (string) $file->getStream();
+    // $auth->uploadFile('product-images', $filename, $fileData, $file->getClientMediaType());
+    //
+    // $publicUrl = $auth->getPublicUrl('product-images', $filename);
+    //
+    // --- POST-PROCESSING ---
+    // TODO: Return the public URL
+    // $response->getBody()->write(json_encode(['image_url' => $publicUrl]));
+    // return $response->withStatus(201)->withHeader('Content-Type', 'application/json');
 
-    if (!$file || $file->getError() !== UPLOAD_ERR_OK) {
-        $response->getBody()->write(json_encode([
-            'error' => 'No file uploaded or upload failed',
-            'code' => $file ? $file->getError() : null,
-        ]));
-        return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
-    }
-
-    $allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    $mimeType = $file->getClientMediaType();
-
-    if (!in_array($mimeType, $allowedTypes, true)) {
-        $response->getBody()->write(json_encode([
-            'error' => 'Invalid file type',
-            'allowed_types' => $allowedTypes,
-        ]));
-        return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
-    }
-
-    $maxSize = 5 * 1024 * 1024;
-    if ($file->getSize() > $maxSize) {
-        $response->getBody()->write(json_encode([
-            'error' => 'File too large',
-            'max_size_bytes' => $maxSize,
-        ]));
-        return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
-    }
-
-    $clientFilename = $file->getClientFilename() ?: 'upload';
-    $safeFilename = preg_replace('/[^A-Za-z0-9_\-\.]/', '_', $clientFilename);
-    $filename = uniqid('', true) . '-' . $safeFilename;
-
-    $auth = new SupabaseAuth();
-    $auth->setToken($request->getAttribute('token'));
-
-    try {
-        $fileData = (string) $file->getStream();
-        $auth->uploadFile('product-images', $filename, $fileData, $mimeType);
-        $publicUrl = $auth->getPublicUrl('product-images', $filename);
-    } catch (Exception $e) {
-        $response->getBody()->write(json_encode([
-            'error' => 'Failed to upload image',
-            'details' => $e->getMessage()
-        ]));
-        return $response->withStatus(500)->withHeader('Content-Type', 'application/json');
-    }
-
-    $response->getBody()->write(json_encode(['image_url' => $publicUrl]));
-    return $response->withStatus(201)->withHeader('Content-Type', 'application/json');
+    $response->getBody()->write(json_encode([
+        'error' => 'Exercise 5: POST /api/products/upload-image is not implemented yet'
+    ]));
+    return $response->withStatus(501)->withHeader('Content-Type', 'application/json');
 
 })->add(new AuthMiddleware());

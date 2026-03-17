@@ -21,7 +21,13 @@ $app->get('/api/auth/login-url', function (Request $request, Response $response)
 $app->get('/api/auth/user', function (Request $request, Response $response) {
     $auth = new SupabaseAuth();
     $auth->setToken($request->getAttribute('token'));
-    $user = $auth->getUser();
+
+    try {
+        $user = $auth->getUser();
+    } catch (Exception $e) {
+        $response->getBody()->write(json_encode(['error' => 'Unauthorized', 'details' => $e->getMessage()]));
+        return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
+    }
 
     if (!$user) {
         $response->getBody()->write(json_encode(['error' => 'Unauthorized']));
